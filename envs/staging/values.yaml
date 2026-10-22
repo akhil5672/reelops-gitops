@@ -1,0 +1,9 @@
+# CI (reelops/.github/workflows/ci.yml) rewrites image.tag on every merge to main.
+env: staging
+image:
+  tag: "bootstrap"   # replaced by the first CI run
+services:
+  ingest-api:
+    hpa: { enabled: true, min: 2, max: 4, cpuUtilization: 60 }
+  transcode-worker:
+    replicas: 1

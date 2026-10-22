@@ -1,0 +1,68 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: reelops-slo
+  namespace: monitoring
+spec:
+  groups:
+    - name: reelops-sli
+      interval: 30s
+      rules:
+        - record: reelops:ingest_error_ratio:rate5m
+          expr: sum by (namespace) (rate(ingest_requests_total{status=~"5.."}[5m])) / sum by (namespace) (rate(ingest_requests_total[5m]))
+        - record: reelops:ingest_error_ratio:rate1h
+          expr: sum by (namespace) (rate(ingest_requests_total{status=~"5.."}[1h])) / sum by (namespace) (rate(ingest_requests_total[1h]))
+        - record: reelops:ingest_error_ratio:rate30m
+          expr: sum by (namespace) (rate(ingest_requests_total{status=~"5.."}[30m])) / sum by (namespace) (rate(ingest_requests_total[30m]))
+        - record: reelops:ingest_error_ratio:rate6h
+          expr: sum by (namespace) (rate(ingest_requests_total{status=~"5.."}[6h])) / sum by (namespace) (rate(ingest_requests_total[6h]))
+        - record: reelops:ingest_fast_ratio:rate1h
+          expr: sum by (namespace) (rate(ingest_request_seconds_bucket{le="0.5"}[1h])) / sum by (namespace) (rate(ingest_request_seconds_count[1h]))
+        - record: reelops:job_fresh_ratio:rate1h
+          expr: sum by (namespace) (rate(job_end_to_end_seconds_bucket{le="120"}[1h])) / sum by (namespace) (rate(job_end_to_end_seconds_count[1h]))
+
+    - name: reelops-slo-burn
+      rules:
+        # Availability SLO 99.5% -> error budget 0.5%. Multi-window burn rate (Google SRE workbook).
+        - alert: IngestErrorBudgetFastBurn
+          expr: reelops:ingest_error_ratio:rate1h > (14.4 * 0.005) and reelops:ingest_error_ratio:rate5m > (14.4 * 0.005)
+          labels: { severity: page }
+          annotations:
+            summary: "{{ $labels.namespace }}: ingest is burning 2% of the 28-day error budget per hour"
+            runbook_url: https://github.com/akhil5672/reelops/blob/main/docs/runbook.md#ingest-5xx
+        - alert: IngestErrorBudgetSlowBurn
+          expr: reelops:ingest_error_ratio:rate6h > (6 * 0.005) and reelops:ingest_error_ratio:rate30m > (6 * 0.005)
+          labels: { severity: ticket }
+          annotations:
+            summary: "{{ $labels.namespace }}: ingest error budget burning steadily"
+            runbook_url: https://github.com/akhil5672/reelops/blob/main/docs/runbook.md#ingest-5xx
+        - alert: TranscodeFreshnessSLOAtRisk
+          expr: reelops:job_fresh_ratio:rate1h < 0.99
+          for: 15m
+          labels: { severity: ticket }
+          annotations:
+            summary: "{{ $labels.namespace }}: under 99% of jobs finish within 2 minutes"
+            runbook_url: https://github.com/akhil5672/reelops/blob/main/docs/runbook.md#slow-jobs
+
+    - name: reelops-symptoms
+      rules:
+        - alert: IngestDLQNotEmpty
+          expr: max by (dimension_QueueName) (aws_sqs_approximate_number_of_messages_visible_maximum{dimension_QueueName=~"reelops-ingest-.*-dlq"}) > 0
+          for: 5m
+          labels: { severity: ticket }
+          annotations:
+            summary: "{{ $labels.dimension_QueueName }} has poison messages"
+            runbook_url: https://github.com/akhil5672/reelops/blob/main/docs/runbook.md#dlq
+        - alert: IngestQueueBacklog
+          expr: max by (dimension_QueueName) (aws_sqs_approximate_number_of_messages_visible_maximum{dimension_QueueName=~"reelops-ingest-[a-z]+"}) > 50
+          for: 10m
+          labels: { severity: ticket }
+          annotations:
+            summary: "{{ $labels.dimension_QueueName }} backlog above 50 jobs"
+            runbook_url: https://github.com/akhil5672/reelops/blob/main/docs/runbook.md#slow-jobs
+        - alert: ReelopsPodCrashLooping
+          expr: increase(kube_pod_container_status_restarts_total{namespace=~"reelops-.*"}[15m]) > 3
+          labels: { severity: page }
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.pod }} restarting repeatedly"
+            runbook_url: https://github.com/akhil5672/reelops/blob/main/docs/runbook.md#crashloop

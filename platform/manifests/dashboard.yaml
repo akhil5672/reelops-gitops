@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: reelops-dashboard
+  namespace: monitoring
+  labels: { grafana_dashboard: "1" }
+data:
+  reelops.json: |
+    {
+      "title": "ReelOps",
+      "uid": "reelops",
+      "schemaVersion": 39,
+      "time": { "from": "now-3h", "to": "now" },
+      "templating": { "list": [
+        { "name": "ns", "type": "query", "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "query": "label_values(ingest_requests_total, namespace)", "current": { "text": "reelops-staging", "value": "reelops-staging" } }
+      ] },
+      "panels": [
+        { "type": "timeseries", "title": "Ingest requests/s by status", "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+          "targets": [ { "expr": "sum by (status) (rate(ingest_requests_total{namespace=\"$ns\"}[5m]))", "legendFormat": "{{status}}" } ] },
+        { "type": "timeseries", "title": "Ingest p95 latency (s)", "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+          "targets": [ { "expr": "histogram_quantile(0.95, sum by (le) (rate(ingest_request_seconds_bucket{namespace=\"$ns\"}[5m])))" } ] },
+        { "type": "stat", "title": "Error ratio (1h)", "gridPos": { "x": 0, "y": 8, "w": 6, "h": 6 },
+          "fieldConfig": { "defaults": { "unit": "percentunit" } },
+          "targets": [ { "expr": "reelops:ingest_error_ratio:rate1h{namespace=\"$ns\"}" } ] },
+        { "type": "stat", "title": "Jobs within 2 min (1h)", "gridPos": { "x": 6, "y": 8, "w": 6, "h": 6 },
+          "fieldConfig": { "defaults": { "unit": "percentunit" } },
+          "targets": [ { "expr": "reelops:job_fresh_ratio:rate1h{namespace=\"$ns\"}" } ] },
+        { "type": "timeseries", "title": "Jobs processed by result", "gridPos": { "x": 12, "y": 8, "w": 12, "h": 6 },
+          "targets": [ { "expr": "sum by (result) (rate(jobs_processed_total{namespace=\"$ns\"}[5m]))", "legendFormat": "{{result}}" } ] },
+        { "type": "timeseries", "title": "SQS queue depth (CloudWatch)", "gridPos": { "x": 0, "y": 14, "w": 12, "h": 7 },
+          "targets": [ { "expr": "max by (dimension_QueueName) (aws_sqs_approximate_number_of_messages_visible_maximum)", "legendFormat": "{{dimension_QueueName}}" } ] },
+        { "type": "timeseries", "title": "Pod restarts (15m)", "gridPos": { "x": 12, "y": 14, "w": 12, "h": 7 },
+          "targets": [ { "expr": "sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\"$ns\"}[15m]))", "legendFormat": "{{pod}}" } ] }
+      ]
+    }

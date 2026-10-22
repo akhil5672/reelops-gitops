@@ -1,0 +1,67 @@
+# Yet Another CloudWatch Exporter: pulls SQS + ALB metrics from CloudWatch into Prometheus.
+# AWS access comes from the Pod Identity association for monitoring/yace (Terraform).
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: yace, namespace: monitoring }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: yace-config, namespace: monitoring }
+data:
+  config.yml: |
+    apiVersion: v1alpha1
+    discovery:
+      jobs:
+        - type: AWS/SQS
+          regions: [us-east-1]
+          searchTags:
+            - { key: project, value: reelops }
+          period: 60
+          length: 300
+          metrics:
+            - { name: ApproximateNumberOfMessagesVisible, statistics: [Maximum] }
+            - { name: ApproximateAgeOfOldestMessage, statistics: [Maximum] }
+        - type: AWS/ApplicationELB
+          regions: [us-east-1]
+          searchTags:
+            - { key: project, value: reelops }
+          period: 60
+          length: 300
+          metrics:
+            - { name: HTTPCode_ELB_5XX_Count, statistics: [Sum] }
+            - { name: TargetResponseTime, statistics: [Average] }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: yace, namespace: monitoring, labels: { app: yace } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: yace } }
+  template:
+    metadata: { labels: { app: yace } }
+    spec:
+      serviceAccountName: yace
+      containers:
+        - name: yace
+          # Check https://github.com/prometheus-community/yet-another-cloudwatch-exporter/releases for the latest tag
+          image: quay.io/prometheuscommunity/yet-another-cloudwatch-exporter:v0.61.2
+          args: ["--config.file=/config/config.yml", "--scraping-interval=60"]
+          ports: [{ name: http, containerPort: 5000 }]
+          resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { memory: 128Mi } }
+          volumeMounts: [{ name: config, mountPath: /config }]
+      volumes:
+        - { name: config, configMap: { name: yace-config } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: yace, namespace: monitoring, labels: { app: yace } }
+spec:
+  selector: { app: yace }
+  ports: [{ name: http, port: 5000, targetPort: http }]
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata: { name: yace, namespace: monitoring }
+spec:
+  selector: { matchLabels: { app: yace } }
+  endpoints: [{ port: http, interval: 60s }]

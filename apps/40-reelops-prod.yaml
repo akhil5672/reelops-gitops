@@ -1,0 +1,25 @@
+# Prod: promoted by PR (copy the tag from envs/staging/values.yaml to envs/prod/values.yaml).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: reelops-prod
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "10" }
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  project: default
+  sources:
+    - repoURL: https://github.com/akhil5672/reelops
+      targetRevision: main
+      path: charts/reelops
+      helm:
+        releaseName: reelops-prod
+        valueFiles: [$values/envs/prod/values.yaml]
+    - repoURL: https://github.com/akhil5672/reelops-gitops
+      targetRevision: main
+      ref: values
+  destination: { server: https://kubernetes.default.svc, namespace: reelops-prod }
+  syncPolicy:
+    # No automated block: production syncs only when you click Sync (or `argocd app sync reelops-prod`).
+    syncOptions: [CreateNamespace=true, SkipDryRunOnMissingResource=true]
+    retry: { limit: 5, backoff: { duration: 20s, factor: 2, maxDuration: 3m } }

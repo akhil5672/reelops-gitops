@@ -1,0 +1,9 @@
+# Promote: open a PR that copies image.tag from envs/staging/values.yaml, then sync reelops-prod in Argo CD.
+env: prod
+image:
+  tag: "bootstrap"
+services:
+  ingest-api:
+    hpa: { enabled: true, min: 2, max: 6, cpuUtilization: 60 }
+  transcode-worker:
+    replicas: 2
