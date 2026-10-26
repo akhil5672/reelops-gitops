@@ -1,7 +1,7 @@
 # CI (reelops/.github/workflows/ci.yml) rewrites image.tag on every merge to main.
 env: staging
 image:
-  tag: "ef07ea210aab14f0cadef8b4b138c913656ca2a9" # replaced by the first CI run
+  tag: "8cf927c2b7d36972ea06c4d4eac9d7bc0192f46a" # replaced by the first CI run
 services:
   ingest-api:
     hpa: {enabled: true, min: 2, max: 4, cpuUtilization: 60}
