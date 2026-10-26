@@ -44,7 +44,7 @@ spec:
       containers:
         - name: yace
           # Check https://github.com/prometheus-community/yet-another-cloudwatch-exporter/releases for the latest tag
-          image: quay.io/prometheuscommunity/yet-another-cloudwatch-exporter:v0.61.2
+          image: quay.io/prometheuscommunity/yet-another-cloudwatch-exporter:v0.68.0
           args: ["--config.file=/config/config.yml", "--scraping-interval=60"]
           ports: [{ name: http, containerPort: 5000 }]
           resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { memory: 128Mi } }
