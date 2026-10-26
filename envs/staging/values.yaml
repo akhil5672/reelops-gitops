@@ -5,5 +5,7 @@ image:
 services:
   ingest-api:
     hpa: {enabled: true, min: 2, max: 4, cpuUtilization: 60}
+    env:
+      CHAOS_FAIL_RATE: "0.3"
   transcode-worker:
     replicas: 1
